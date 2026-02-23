@@ -109,6 +109,15 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
   text-shadow: 1px 1px 0 rgba(255,255,255,0.3);
 }
 .grid-table td.empty { background: transparent; border: none; }
+.grid-table td.tile-new {
+  background: #b8e6b8;
+  border-color: #4caf50;
+  animation: fade-highlight 3s ease-out forwards;
+}
+@keyframes fade-highlight {
+  0% { background: #b8e6b8; border-color: #4caf50; }
+  100% { background: #f5deb3; border-color: #c8a96e; }
+}
 
 /* Action buttons */
 .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
@@ -150,6 +159,16 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
   font-weight: 700;
   font-family: monospace;
   color: #d9534f;
+}
+.unplaced-tile.tile-new {
+  background: #b8e6b8;
+  border-color: #4caf50;
+  color: #2e7d32;
+  animation: fade-unplaced-highlight 3s ease-out forwards;
+}
+@keyframes fade-unplaced-highlight {
+  0% { background: #b8e6b8; border-color: #4caf50; color: #2e7d32; }
+  100% { background: #f5deb3; border-color: #d9534f; color: #d9534f; }
 }
 
 .unplaced-tile .swap-score {
@@ -305,6 +324,11 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
 <script>
 let sessionId = null;
 let cameraStream = null;
+let prevCells = {};  // "row,col" -> letter — previous grid state
+let prevUnplaced = [];  // previous unplaced letters
+let newCellKeys = new Set();  // keys of newly added grid cells
+let newUnplacedIndices = new Set();  // indices of newly added unplaced tiles
+let allLetters = [];  // all letters in order of addition
 
 /* -- Utilities -- */
 async function apiCall(url, body) {
@@ -340,6 +364,10 @@ function updateStatus(data) {
   if (data.new_letter) document.getElementById("st-strategy").textContent = (data.strategy || "") + " (+" + data.new_letter + ")";
 }
 
+function syncLettersInput() {
+  document.getElementById("letters-input").value = allLetters.join("");
+}
+
 /* -- Grid rendering -- */
 function renderGrid(data) {
   if (!data.cells || data.cells.length === 0) return;
@@ -351,9 +379,11 @@ function renderGrid(data) {
   for (let r = b.min_row; r <= b.max_row; r++) {
     html += "<tr>";
     for (let c = b.min_col; c <= b.max_col; c++) {
-      const letter = cellMap[r + "," + c];
+      const key = r + "," + c;
+      const letter = cellMap[key];
       if (letter) {
-        html += '<td class="tile">' + letter + "</td>";
+        const cls = newCellKeys.has(key) ? "tile tile-new" : "tile";
+        html += '<td class="' + cls + '">' + letter + "</td>";
       } else {
         html += '<td class="empty"></td>';
       }
@@ -381,7 +411,7 @@ function renderUnplaced(data) {
   const container = document.getElementById("unplaced-tiles");
   if (data.unplaced && data.unplaced.length > 0) {
     const showScores = document.getElementById("show-swap-scores").checked;
-    container.innerHTML = data.unplaced.map(l => {
+    container.innerHTML = data.unplaced.map((l, i) => {
       let scoreHtml = "";
       if (showScores && swapScores[l]) {
         const s = swapScores[l];
@@ -390,12 +420,14 @@ function renderUnplaced(data) {
         else if (s.recommendation === "RECOMMENDED") cls = "moderate";
         scoreHtml = '<span class="swap-score ' + cls + '">' + s.score.toFixed(1) + '</span>';
       }
-      return '<span class="unplaced-tile">' + l + scoreHtml + '</span>';
+      const newCls = newUnplacedIndices.has(i) ? " tile-new" : "";
+      return '<span class="unplaced-tile' + newCls + '">' + l + scoreHtml + '</span>';
     }).join("");
     section.style.display = "";
   } else {
     swapScores = {};
-    section.style.display = "none";
+    container.innerHTML = '<span style="color:#8b7355;font-size:13px">All letters placed!</span>';
+    section.style.display = "";
   }
 }
 
@@ -422,7 +454,34 @@ function toggleSwapScores() {
 
 let lastUnplaced = [];
 
+function computeDiffs(data) {
+  // Find new grid cells (present now but not before)
+  newCellKeys = new Set();
+  const curCells = {};
+  if (data.cells) data.cells.forEach(c => { curCells[c.row + "," + c.col] = c.letter; });
+  for (const key in curCells) {
+    if (!prevCells[key]) newCellKeys.add(key);
+  }
+  // Find new unplaced letters by comparing sorted lists
+  // Use a consumable copy of prevUnplaced to match each new letter
+  newUnplacedIndices = new Set();
+  const prevCopy = [...prevUnplaced];
+  const curUnplaced = data.unplaced || [];
+  for (let i = 0; i < curUnplaced.length; i++) {
+    const idx = prevCopy.indexOf(curUnplaced[i]);
+    if (idx !== -1) {
+      prevCopy.splice(idx, 1);  // consume the match
+    } else {
+      newUnplacedIndices.add(i);  // new letter
+    }
+  }
+  // Save current state for next diff
+  prevCells = curCells;
+  prevUnplaced = curUnplaced;
+}
+
 function showResult(data) {
+  computeDiffs(data);
   renderGrid(data);
   lastUnplaced = data.unplaced || [];
   if (document.getElementById("show-swap-scores").checked && lastUnplaced.length > 0) {
@@ -495,6 +554,8 @@ async function doSolve() {
     hideLoading();
     if (data.error) { showError(data.error); return; }
     sessionId = data.session_id;
+    allLetters = [...letters];
+    syncLettersInput();
     showResult(data);
   } catch (e) {
     hideLoading();
@@ -516,6 +577,8 @@ async function doPeel() {
       hideLoading();
       if (data.error) { showError(data.error); return; }
       document.getElementById("peel-letters").value = "";
+      allLetters.push(...letters);
+      syncLettersInput();
       showResult(data);
     } catch (e) { hideLoading(); showError("Add failed: " + e.message); }
   } else {
@@ -526,6 +589,8 @@ async function doPeel() {
       hideLoading();
       if (data.win) { showError("Pool is empty \u2014 you win!"); return; }
       if (data.error) { showError(data.error); return; }
+      if (data.new_letter) allLetters.push(data.new_letter);
+      syncLettersInput();
       showResult(data);
     } catch (e) { hideLoading(); showError("Peel failed: " + e.message); }
   }
@@ -548,10 +613,17 @@ async function doSwap() {
     if (data.error) { showError(data.error); return; }
     document.getElementById("swap-letter").value = "";
     document.getElementById("swap-draw").value = "";
+    // Update allLetters: remove returned, add drawn
+    const returned = data.returned_letter || letter || "";
+    if (returned) {
+      const idx = allLetters.indexOf(returned);
+      if (idx !== -1) allLetters.splice(idx, 1);
+    }
+    if (data.drawn_tiles) allLetters.push(...data.drawn_tiles);
+    syncLettersInput();
     showResult(data);
     if (data.drawn_tiles) {
-      const returned = data.returned_letter || letter || "?";
-      document.getElementById("st-strategy").textContent = "Swapped " + returned + " \u2192 drew " + data.drawn_tiles.join(", ");
+      document.getElementById("st-strategy").textContent = "Swapped " + (returned || "?") + " \u2192 drew " + data.drawn_tiles.join(", ");
     }
   } catch (e) { hideLoading(); showError("Swap failed: " + e.message); }
 }

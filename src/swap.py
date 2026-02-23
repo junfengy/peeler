@@ -60,14 +60,11 @@ def analyze_swaps(letters: list[str], dictionary: Dictionary) -> list[dict]:
     counts = Counter(letters)
     recommendations: list[dict] = []
 
-    # Only analyze letters with difficulty >= 5
+    # Analyze all unique letters, sorted by difficulty (hardest first)
     hard_letters = sorted(
-        {ch for ch in counts if LETTER_DIFFICULTY.get(ch, 0) >= 5},
+        set(counts),
         key=lambda ch: -LETTER_DIFFICULTY.get(ch, 0),
     )
-
-    if not hard_letters:
-        return []
 
     current_difficulty = sum(LETTER_DIFFICULTY.get(ch, 0) for ch in letters)
 

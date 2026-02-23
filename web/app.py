@@ -302,7 +302,9 @@ def swap():
     if not letter.isalpha() or len(letter) != 1:
         return jsonify({"error": "Invalid letter"}), 400
     if unplaced[letter] <= 0:
-        return jsonify({"error": f"Letter '{letter}' is not unplaced (it's on the grid)"}), 400
+        if hand[letter] > 0:
+            return jsonify({"error": f"Letter '{letter}' is on the grid, not swappable"}), 400
+        return jsonify({"error": f"Letter '{letter}' is not in your hand"}), 400
 
     pool: TilePool = game["pool"]
 
