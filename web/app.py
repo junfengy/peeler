@@ -399,12 +399,13 @@ def analyze():
 if __name__ == "__main__":
     print(f"Dictionary loaded: {DICTIONARY.word_count} words")
     cert_dir = Path(__file__).resolve().parent / "certs"
-    cert_file = cert_dir / "spade.crt"
-    key_file = cert_dir / "spade.key"
-    if cert_file.exists() and key_file.exists():
-        ssl_ctx = (str(cert_file), str(key_file))
-        print(f"Using Tailscale cert: {cert_file}")
+    ssl_ctx = "adhoc"
+    for crt in sorted(cert_dir.glob("*.crt")):
+        key = crt.with_suffix(".key")
+        if key.exists():
+            ssl_ctx = (str(crt), str(key))
+            print(f"Using TLS cert: {crt}")
+            break
     else:
-        ssl_ctx = "adhoc"
-        print("No Tailscale cert found, using self-signed")
+        print("No certs found in web/certs/, using self-signed")
     app.run(debug=True, host="0.0.0.0", port=8080, ssl_context=ssl_ctx)
