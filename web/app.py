@@ -277,25 +277,61 @@ def manual():
 def swap():
     data = request.get_json()
     session_id = data.get("session_id", "")
-    letter = data.get("letter", "").upper()
     game = GAMES.get(session_id)
     if game is None:
         return jsonify({"error": "Session not found"}), 404
-    if not letter or not letter.isalpha() or len(letter) != 1:
-        return jsonify({"error": "Invalid letter"}), 400
 
-    # Only allow swapping unplaced letters
     from collections import Counter
     hand = Counter(game["letters"])
     on_grid = Counter(game["grid"].cells.values())
     unplaced = hand - on_grid
+    unplaced_list = sorted(unplaced.elements())
+
+    if not unplaced_list:
+        return jsonify({"error": "No unplaced letters to swap"}), 400
+
+    # Determine which letter to return (blank = highest-scored recommendation)
+    letter = data.get("letter", "").upper().strip()
+    if not letter:
+        recs = analyze_swaps(unplaced_list, DICTIONARY)
+        if recs:
+            letter = recs[0]["letter"]
+        else:
+            letter = unplaced_list[0]
+
+    if not letter.isalpha() or len(letter) != 1:
+        return jsonify({"error": "Invalid letter"}), 400
     if unplaced[letter] <= 0:
         return jsonify({"error": f"Letter '{letter}' is not unplaced (it's on the grid)"}), 400
 
     pool: TilePool = game["pool"]
-    drawn = pool.swap(letter)
-    if drawn is None:
-        return jsonify({"error": "Not enough tiles in pool to swap"}), 400
+
+    # Determine draw letters (blank = 3 random from pool)
+    draw_letters_req = data.get("draw_letters", [])
+    draw_letters_req = [ch.upper() for ch in draw_letters_req if isinstance(ch, str) and ch.isalpha()]
+
+    if draw_letters_req:
+        # User specified exact letters to draw — put letter back, take specific ones
+        pool._tiles.append(letter)
+        import random
+        random.shuffle(pool._tiles)
+        # Check all requested letters are available in the pool
+        pool_counts = Counter(pool._tiles)
+        req_counts = Counter(draw_letters_req)
+        for ch, need in req_counts.items():
+            if pool_counts.get(ch, 0) < need:
+                # Undo — take the letter back out
+                pool._tiles.remove(letter)
+                return jsonify({"error": f"Pool doesn't have enough '{ch}' tiles"}), 400
+        # Draw the specific letters
+        drawn = []
+        for ch in draw_letters_req:
+            pool._tiles.remove(ch)
+            drawn.append(ch)
+    else:
+        drawn = pool.swap(letter)
+        if drawn is None:
+            return jsonify({"error": "Not enough tiles in pool to swap"}), 400
 
     game["letters"].remove(letter)
     game["letters"].extend(drawn)
@@ -310,6 +346,7 @@ def swap():
     _try_place_unplaced(game)
     result = grid_to_json(game["grid"], all_letters=game["letters"])
     result["session_id"] = session_id
+    result["returned_letter"] = letter
     result["drawn_tiles"] = drawn
     result["strategy"] = strategy
     result["pool_remaining"] = pool.remaining()
