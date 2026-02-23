@@ -133,29 +133,16 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
   text-align: center;
 }
 
-/* Analysis panel */
-.analysis-panel { display: none; }
-.analysis-panel.visible { display: block; }
-.rec-item {
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin-bottom: 6px;
-  font-size: 13px;
-}
-.rec-strong { background: #f8d7da; border-left: 4px solid #d9534f; }
-.rec-moderate { background: #fff3cd; border-left: 4px solid #f0ad4e; }
-.rec-none { background: #d4edda; border-left: 4px solid #5cb85c; }
-.rec-letter { font-weight: 700; font-size: 16px; font-family: monospace; }
-.rec-reasons { margin-top: 4px; color: #555; font-size: 12px; }
-
 /* Unplaced tiles */
 .unplaced-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
 .unplaced-tile {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 2px 4px;
   background: #f5deb3;
   border: 2px dashed #d9534f;
   border-radius: 4px;
@@ -164,6 +151,18 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
   font-family: monospace;
   color: #d9534f;
 }
+
+.unplaced-tile .swap-score {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  font-family: sans-serif;
+  line-height: 1;
+  margin-top: 1px;
+}
+.swap-score.strong { color: #d9534f; }
+.swap-score.moderate { color: #f0ad4e; }
+.swap-score.low { color: #999; }
 
 /* Word list */
 .word-list { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -254,16 +253,21 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
   </div>
 </div>
 
-<!-- Unplaced letters -->
-<div class="section" id="unplaced-section" style="display:none">
-  <div class="section-title">Unplaced Letters</div>
-  <div class="unplaced-tiles" id="unplaced-tiles"></div>
-</div>
-
 <!-- Grid -->
 <div class="section" id="grid-section" style="display:none">
   <div class="section-title">Grid</div>
   <div class="grid-container" id="grid-container"></div>
+</div>
+
+<!-- Unplaced letters -->
+<div class="section" id="unplaced-section" style="display:none">
+  <div class="section-title" style="display:flex;align-items:center;gap:8px">
+    Unplaced Letters
+    <label style="font-weight:400;font-size:12px;color:#8b7355;cursor:pointer;display:flex;align-items:center;gap:4px">
+      <input type="checkbox" id="show-swap-scores" onchange="toggleSwapScores()"> Show swap scores
+    </label>
+  </div>
+  <div class="unplaced-tiles" id="unplaced-tiles"></div>
 </div>
 
 <!-- Actions -->
@@ -281,14 +285,7 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
       <input type="text" class="inline-input" id="swap-draw" maxlength="3" placeholder="???" style="width:50px;letter-spacing:2px">
       <button class="btn btn-danger" onclick="doSwap()">Swap</button>
     </div>
-    <button class="btn btn-info" onclick="doAnalyze()">Analyze Swaps</button>
   </div>
-</div>
-
-<!-- Analysis -->
-<div class="section analysis-panel" id="analysis-section">
-  <div class="section-title">Swap Recommendations</div>
-  <div id="analysis-list"></div>
 </div>
 
 <!-- Words -->
@@ -377,22 +374,62 @@ function renderWords(data) {
   document.getElementById("words-section").style.display = "";
 }
 
+let swapScores = {};  // letter -> {score, recommendation}
+
 function renderUnplaced(data) {
   const section = document.getElementById("unplaced-section");
   const container = document.getElementById("unplaced-tiles");
   if (data.unplaced && data.unplaced.length > 0) {
-    container.innerHTML = data.unplaced.map(l =>
-      '<span class="unplaced-tile">' + l + '</span>'
-    ).join("");
+    const showScores = document.getElementById("show-swap-scores").checked;
+    container.innerHTML = data.unplaced.map(l => {
+      let scoreHtml = "";
+      if (showScores && swapScores[l]) {
+        const s = swapScores[l];
+        let cls = "low";
+        if (s.recommendation.includes("STRONGLY")) cls = "strong";
+        else if (s.recommendation === "RECOMMENDED") cls = "moderate";
+        scoreHtml = '<span class="swap-score ' + cls + '">' + s.score.toFixed(1) + '</span>';
+      }
+      return '<span class="unplaced-tile">' + l + scoreHtml + '</span>';
+    }).join("");
     section.style.display = "";
   } else {
+    swapScores = {};
     section.style.display = "none";
   }
 }
 
+async function fetchSwapScores() {
+  if (!sessionId) return;
+  try {
+    const data = await apiCall("/analyze", {session_id: sessionId});
+    swapScores = {};
+    if (data.recommendations) {
+      data.recommendations.forEach(r => {
+        swapScores[r.letter] = {score: r.swap_score, recommendation: r.recommendation, reasons: r.reasons};
+      });
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function toggleSwapScores() {
+  if (document.getElementById("show-swap-scores").checked && sessionId) {
+    fetchSwapScores().then(() => renderUnplaced({unplaced: lastUnplaced}));
+  } else {
+    renderUnplaced({unplaced: lastUnplaced});
+  }
+}
+
+let lastUnplaced = [];
+
 function showResult(data) {
   renderGrid(data);
-  renderUnplaced(data);
+  lastUnplaced = data.unplaced || [];
+  if (document.getElementById("show-swap-scores").checked && lastUnplaced.length > 0) {
+    fetchSwapScores().then(() => renderUnplaced(data));
+  } else {
+    renderUnplaced(data);
+  }
   renderWords(data);
   updateStatus(data);
   document.getElementById("actions-section").style.display = "";
@@ -514,32 +551,6 @@ async function doSwap() {
       document.getElementById("st-strategy").textContent = "Swapped " + returned + " \u2192 drew " + data.drawn_tiles.join(", ");
     }
   } catch (e) { hideLoading(); showError("Swap failed: " + e.message); }
-}
-
-async function doAnalyze() {
-  if (!sessionId) { showError("Solve first"); return; }
-  showLoading("Analyzing swaps...");
-  try {
-    const data = await apiCall("/analyze", {session_id: sessionId});
-    hideLoading();
-    if (data.error) { showError(data.error); return; }
-    const list = document.getElementById("analysis-list");
-    if (!data.recommendations || data.recommendations.length === 0) {
-      list.innerHTML = '<div class="rec-item rec-none">No swap recommendations \u2014 your letters look good!</div>';
-    } else {
-      list.innerHTML = data.recommendations.map(r => {
-        let cls = "rec-none";
-        if (r.recommendation.includes("STRONGLY")) cls = "rec-strong";
-        else if (r.recommendation === "RECOMMENDED") cls = "rec-moderate";
-        return '<div class="rec-item ' + cls + '">' +
-          '<span class="rec-letter">' + r.letter + '</span> \u2014 ' + r.recommendation +
-          ' (score: ' + (r.swap_score !== undefined ? r.swap_score.toFixed(2) : "N/A") + ')' +
-          '<div class="rec-reasons">' + (r.reasons || []).join(" \u2022 ") + '</div>' +
-          '</div>';
-      }).join("");
-    }
-    document.getElementById("analysis-section").classList.add("visible");
-  } catch (e) { hideLoading(); showError("Analysis failed: " + e.message); }
 }
 
 /* -- Timeout slider -- */
