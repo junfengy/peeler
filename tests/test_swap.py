@@ -103,10 +103,10 @@ class TestAnalyzeSwaps:
         assert q_rec is not None
         assert q_rec["recommendation"] == "STRONGLY RECOMMENDED"
 
-    def test_good_hand_empty(self, good_hand, small_dictionary) -> None:
+    def test_good_hand_all_not_recommended(self, good_hand, small_dictionary) -> None:
         recs = analyze_swaps(good_hand, small_dictionary)
-        # AEINORST has no letters with difficulty >= 5
-        assert recs == []
+        # AEINORST has no hard letters — all should be NOT RECOMMENDED
+        assert all(r["recommendation"] == "NOT RECOMMENDED" for r in recs)
 
     def test_result_dict_structure(self, q_without_u_hand, small_dictionary) -> None:
         recs = analyze_swaps(q_without_u_hand, small_dictionary)
@@ -129,10 +129,10 @@ class TestAnalyzeSwaps:
         scores = [r["swap_score"] for r in recs]
         assert scores == sorted(scores, reverse=True)
 
-    def test_all_vowels_empty(self, all_vowels_hand, small_dictionary) -> None:
+    def test_all_vowels_low_scores(self, all_vowels_hand, small_dictionary) -> None:
         recs = analyze_swaps(all_vowels_hand, small_dictionary)
-        # All vowels have difficulty 0, so no hard letters
-        assert recs == []
+        # All vowels have difficulty 0 — scores should be low
+        assert all(r["swap_score"] < 0.8 for r in recs)
 
     def test_j_k_in_consonant_hand_recommended(self, small_dictionary) -> None:
         # J(8) and K(5) are hard letters
@@ -144,10 +144,11 @@ class TestAnalyzeSwaps:
 
 
 class TestPrintSwapAnalysis:
-    def test_no_hard_letters_message(self, good_hand, small_dictionary, capsys) -> None:
+    def test_good_hand_shows_analysis(self, good_hand, small_dictionary, capsys) -> None:
         print_swap_analysis(good_hand, small_dictionary)
         captured = capsys.readouterr()
-        assert "no swaps recommended" in captured.out.lower()
+        assert "Swap Analysis" in captured.out
+        assert "NOT RECOMMENDED" in captured.out
 
     def test_hard_letters_shows_analysis(self, q_without_u_hand, small_dictionary, capsys) -> None:
         print_swap_analysis(q_without_u_hand, small_dictionary)
