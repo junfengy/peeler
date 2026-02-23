@@ -271,13 +271,9 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
   <div class="section-title">Actions</div>
   <div class="actions">
     <div class="action-group">
-      <div class="action-group-label">Draw random</div>
+      <div class="action-group-label">Add letters (blank = random)</div>
+      <input type="text" class="inline-input" id="peel-letters" placeholder="AEF" style="width:60px;letter-spacing:2px">
       <button class="btn btn-primary" onclick="doPeel()">Peel</button>
-    </div>
-    <div class="action-group">
-      <div class="action-group-label">Add specific</div>
-      <input type="text" class="inline-input" id="manual-letter" placeholder="AEF" style="width:60px;letter-spacing:2px">
-      <button class="btn btn-secondary" onclick="doManual()">Add</button>
     </div>
     <div class="action-group">
       <div class="action-group-label">Return &amp; draw 3</div>
@@ -468,29 +464,30 @@ async function doSolve() {
 /* -- Game actions -- */
 async function doPeel() {
   if (!sessionId) { showError("Solve first"); return; }
-  showLoading("Peeling...");
-  try {
-    const data = await apiCall("/peel", {session_id: sessionId});
-    hideLoading();
-    if (data.win) { showError("Pool is empty \u2014 you win!"); return; }
-    if (data.error) { showError(data.error); return; }
-    showResult(data);
-  } catch (e) { hideLoading(); showError("Peel failed: " + e.message); }
-}
-
-async function doManual() {
-  if (!sessionId) { showError("Solve first"); return; }
-  const raw = document.getElementById("manual-letter").value.trim().toUpperCase();
+  const raw = document.getElementById("peel-letters").value.trim().toUpperCase();
   const letters = raw.split("").filter(c => /[A-Z]/.test(c));
-  if (letters.length === 0) { showError("Enter one or more letters"); return; }
-  showLoading("Adding " + letters.join("") + "...");
-  try {
-    const data = await apiCall("/manual", {session_id: sessionId, letters});
-    hideLoading();
-    if (data.error) { showError(data.error); return; }
-    document.getElementById("manual-letter").value = "";
-    showResult(data);
-  } catch (e) { hideLoading(); showError("Manual add failed: " + e.message); }
+
+  if (letters.length > 0) {
+    // Add specific letters
+    showLoading("Adding " + letters.join("") + "...");
+    try {
+      const data = await apiCall("/manual", {session_id: sessionId, letters});
+      hideLoading();
+      if (data.error) { showError(data.error); return; }
+      document.getElementById("peel-letters").value = "";
+      showResult(data);
+    } catch (e) { hideLoading(); showError("Add failed: " + e.message); }
+  } else {
+    // Draw random from pool
+    showLoading("Peeling...");
+    try {
+      const data = await apiCall("/peel", {session_id: sessionId});
+      hideLoading();
+      if (data.win) { showError("Pool is empty \u2014 you win!"); return; }
+      if (data.error) { showError(data.error); return; }
+      showResult(data);
+    } catch (e) { hideLoading(); showError("Peel failed: " + e.message); }
+  }
 }
 
 async function doSwap() {

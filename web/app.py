@@ -83,6 +83,33 @@ def _ollama_ocr(image_b64: str) -> list[str] | None:
 GAMES: dict[str, dict] = {}
 
 
+def _try_place_unplaced(game: dict) -> str | None:
+    """Try to place any unplaced letters using quick-attach only.
+
+    Uses only the fast quick_attach strategy (short words that fit with
+    one new cell) to avoid expensive full re-solves.
+    Returns the last strategy used, or None if nothing was placed.
+    """
+    from collections import Counter
+    from src.solver import _quick_attach
+
+    hand = Counter(game["letters"])
+    on_grid = Counter(game["grid"].cells.values())
+    unplaced = sorted((hand - on_grid).elements())
+    if not unplaced:
+        return None
+
+    last_strategy = None
+    for letter in unplaced:
+        result = _quick_attach(
+            game["grid"], letter, game["letters"], DICTIONARY, timeout=2.0,
+        )
+        if result is not None:
+            game["grid"] = result
+            last_strategy = "quick_attach"
+    return last_strategy
+
+
 def grid_to_json(grid: Grid, all_letters: list[str] | None = None) -> dict:
     """Serialize a Grid to the JSON format expected by the frontend."""
     min_r, max_r, min_c, max_c = grid.bounds()
@@ -201,11 +228,11 @@ def peel():
         return jsonify({"error": "Pool is empty — you win!", "win": True}), 200
 
     game["letters"].append(new_letter)
-    grid, strategy = incremental_solve(
+    game["grid"], strategy = incremental_solve(
         game["grid"], new_letter, game["letters"], DICTIONARY
     )
-    game["grid"] = grid
-    result = grid_to_json(grid, all_letters=game["letters"])
+    _try_place_unplaced(game)
+    result = grid_to_json(game["grid"], all_letters=game["letters"])
     result["session_id"] = session_id
     result["new_letter"] = new_letter
     result["strategy"] = strategy
@@ -237,6 +264,7 @@ def manual():
             game["grid"], letter, game["letters"], DICTIONARY
         )
 
+    _try_place_unplaced(game)
     result = grid_to_json(game["grid"], all_letters=game["letters"])
     result["session_id"] = session_id
     result["strategy"] = strategy
@@ -255,8 +283,14 @@ def swap():
         return jsonify({"error": "Session not found"}), 404
     if not letter or not letter.isalpha() or len(letter) != 1:
         return jsonify({"error": "Invalid letter"}), 400
-    if letter not in game["letters"]:
-        return jsonify({"error": f"Letter '{letter}' not in your hand"}), 400
+
+    # Only allow swapping unplaced letters
+    from collections import Counter
+    hand = Counter(game["letters"])
+    on_grid = Counter(game["grid"].cells.values())
+    unplaced = hand - on_grid
+    if unplaced[letter] <= 0:
+        return jsonify({"error": f"Letter '{letter}' is not unplaced (it's on the grid)"}), 400
 
     pool: TilePool = game["pool"]
     drawn = pool.swap(letter)
@@ -266,14 +300,18 @@ def swap():
     game["letters"].remove(letter)
     game["letters"].extend(drawn)
 
-    grid = solve(game["letters"], DICTIONARY, timeout=60)
-    if grid is None:
-        return jsonify({"error": "No solution found after swap"}), 200
+    # Incrementally place each drawn letter instead of full re-solve
+    strategy = ""
+    for new_letter in drawn:
+        game["grid"], strategy = incremental_solve(
+            game["grid"], new_letter, game["letters"], DICTIONARY
+        )
 
-    game["grid"] = grid
-    result = grid_to_json(grid, all_letters=game["letters"])
+    _try_place_unplaced(game)
+    result = grid_to_json(game["grid"], all_letters=game["letters"])
     result["session_id"] = session_id
     result["drawn_tiles"] = drawn
+    result["strategy"] = strategy
     result["pool_remaining"] = pool.remaining()
     return jsonify(result)
 
