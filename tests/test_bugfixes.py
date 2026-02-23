@@ -187,3 +187,66 @@ class TestSolverPlacedWordsClean:
 
         # placed_words should be much less than cell count
         assert len(grid.placed_words) <= len(grid.cells)
+
+
+class TestUnplaceableLetterSkip:
+    """Bug: solver wasted entire timeout trying to place letters like Q
+    that can't appear in any candidate word. Now it detects unplaceable
+    letters upfront and excludes them from the target count."""
+
+    def test_addq_solves_fast(self) -> None:
+        """ADDQ should solve in under 3s — Q is unplaceable."""
+        import time
+        from src.dictionary import load_default_dictionary
+        d = load_default_dictionary()
+        start = time.time()
+        grid = solve(list("ADDQ"), d, timeout=10)
+        elapsed = time.time() - start
+        assert grid is not None
+        assert elapsed < 3.0, f"Took {elapsed:.1f}s, expected < 3s"
+        assert grid.letter_count() == 3  # ADD placed, Q skipped
+
+    def test_placeable_q_still_placed(self) -> None:
+        """When Q can form a word (e.g. QAT), it should still be placed."""
+        from src.dictionary import load_default_dictionary
+        d = load_default_dictionary()
+        grid = solve(list("QATSD"), d, timeout=10)
+        assert grid is not None
+        assert grid.letter_count() == 5  # all letters placeable
+
+    def test_all_unplaceable(self) -> None:
+        """If no words can be formed at all, solver returns None."""
+        from src.dictionary import load_default_dictionary
+        d = load_default_dictionary()
+        grid = solve(list("QQQ"), d, timeout=5)
+        assert grid is None
+
+    def test_multiple_unplaceable(self) -> None:
+        """Multiple unplaceable letters excluded from target."""
+        import time
+        from src.dictionary import load_default_dictionary
+        d = load_default_dictionary()
+        start = time.time()
+        # V and Q have no words formable from these consonant-heavy letters
+        grid = solve(list("ADDVQQ"), d, timeout=10)
+        elapsed = time.time() - start
+        assert grid is not None
+        assert elapsed < 3.0, f"Took {elapsed:.1f}s, expected < 3s"
+        # ADD placed, V and QQ unplaceable
+        assert grid.letter_count() == 3
+
+
+class TestSolverTimeoutRespected:
+    """Bug: timeout check only ran every 500th iteration, so the solver
+    could overshoot the timeout by minutes. Now checks every iteration."""
+
+    def test_respects_timeout(self) -> None:
+        """Solver should stop within 2s of the configured timeout."""
+        import time
+        from src.dictionary import load_default_dictionary
+        d = load_default_dictionary()
+        timeout = 5
+        start = time.time()
+        solve(list("XYZXYZQQ"), d, timeout=timeout)
+        elapsed = time.time() - start
+        assert elapsed < timeout + 2, f"Took {elapsed:.1f}s, expected < {timeout + 2}s"
