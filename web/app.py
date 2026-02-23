@@ -397,22 +397,5 @@ def analyze():
 
 
 if __name__ == "__main__":
-    import threading
-    from flask import redirect
-
-    # HTTP server that redirects to HTTPS
-    http_app = Flask(__name__)
-
-    @http_app.route("/", defaults={"path": ""})
-    @http_app.route("/<path:path>")
-    def redirect_to_https(path: str):
-        return redirect(f"https://{request.host.split(':')[0]}:8080/{path}", code=301)
-
-    threading.Thread(
-        target=lambda: http_app.run(host="0.0.0.0", port=8000),
-        daemon=True,
-    ).start()
-
     print(f"Dictionary loaded: {DICTIONARY.word_count} words")
-    print("HTTP redirect: http://0.0.0.0:8000 -> https://0.0.0.0:8080")
     app.run(debug=True, host="0.0.0.0", port=8080, ssl_context="adhoc")
