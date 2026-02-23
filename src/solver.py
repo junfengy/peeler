@@ -31,6 +31,21 @@ def solve(letters: list[str], dictionary: Dictionary,
         print("No valid words can be formed from these letters.")
         return None
 
+    # Identify letters that appear in zero candidate words — they can never
+    # be placed, so exclude them from the target count to avoid futile search.
+    word_letters: Counter[str] = Counter()
+    for w in all_words:
+        word_letters |= Counter(w)  # union of max counts
+    placeable_counts = Counter(letter_counts)
+    for ch in list(placeable_counts):
+        if word_letters[ch] == 0:
+            del placeable_counts[ch]
+    placeable_total = sum(placeable_counts.values())
+    if placeable_total < total_letters:
+        unplaceable = sorted((letter_counts - placeable_counts).elements())
+        print(f"Letters {unplaceable} cannot appear in any word — solving {placeable_total}/{total_letters}")
+    total_letters = placeable_total
+
     print(f"Found {len(all_words)} candidate words from {total_letters} letters")
 
     grid = Grid()
