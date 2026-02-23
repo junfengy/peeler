@@ -22,6 +22,36 @@ python3 web/app.py
 
 Open https://localhost:8080. Type letters and click Solve, or use the camera to photograph tiles.
 
+### HTTPS with Tailscale (recommended for phone access)
+
+Camera access (`getUserMedia`) requires HTTPS on non-localhost devices. [Tailscale](https://tailscale.com) provides free, auto-renewing TLS certs for your devices.
+
+```bash
+# 1. Install Tailscale on your Mac and phone
+#    https://tailscale.com/download
+
+# 2. Sign in on both devices with the same account
+tailscale up
+
+# 3. Enable HTTPS in the Tailscale admin console
+#    https://login.tailscale.com/admin/dns → HTTPS Certificates → Enable
+
+# 4. Get your hostname
+HOSTNAME=$(tailscale status --json | python3 -c "import sys,json; print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))")
+echo "$HOSTNAME"
+
+# 5. Generate TLS cert
+mkdir -p web/certs
+tailscale cert --cert-file web/certs/cert.crt --key-file web/certs/cert.key "$HOSTNAME"
+
+# 6. Start the web app (auto-detects certs in web/certs/)
+python3 web/app.py
+```
+
+Open `https://<hostname>:8080` from your phone — no certificate warnings, camera works.
+
+Without Tailscale, the app falls back to a self-signed cert (`ssl_context="adhoc"`). The browser will show a warning you can click through, but some phones may block camera access.
+
 ### CLI
 
 ```bash
