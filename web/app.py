@@ -33,7 +33,7 @@ app = Flask(__name__)
 DICTIONARY = load_default_dictionary()
 
 # Ollama vision models to try, in order of preference
-OLLAMA_MODELS = ["minicpm-v", "moondream"]
+OLLAMA_MODELS = ["llama3.2-vision", "minicpm-v", "moondream"]
 OLLAMA_URL = "http://localhost:11434"
 
 TILE_PROMPT = (
@@ -51,8 +51,8 @@ def _parse_letters(text: str) -> list[str]:
     return [p.strip().upper() for p in raw if re.match(r"^[A-Za-z]$", p.strip())]
 
 
-def _ollama_ocr(image_b64: str) -> list[str] | None:
-    """Try OCR via Ollama vision models. Returns letters or None."""
+def _ollama_ocr(image_b64: str) -> tuple[list[str], str] | None:
+    """Try OCR via Ollama vision models. Returns (letters, model_name) or None."""
     for model in OLLAMA_MODELS:
         try:
             payload = _json.dumps({
@@ -72,7 +72,7 @@ def _ollama_ocr(image_b64: str) -> list[str] | None:
             letters = _parse_letters(text)
             if letters:
                 print(f"Ollama OCR ({model}): {letters}")
-                return letters
+                return letters, model
             print(f"Ollama OCR ({model}): no letters parsed from: {text!r}")
         except (URLError, OSError, KeyError, ValueError) as e:
             print(f"Ollama OCR ({model}) failed: {e}")
@@ -166,10 +166,27 @@ def ocr():
     if "," in image_data:
         image_data = image_data.split(",", 1)[1]
 
+    # Save captured image for debugging
+    debug_dir = Path(__file__).resolve().parent / "debug"
+    debug_dir.mkdir(exist_ok=True)
+    capture_id = uuid.uuid4().hex[:8]
+    debug_path = debug_dir / f"capture_{capture_id}.jpg"
+    debug_path.write_bytes(base64.b64decode(image_data))
+    log_path = debug_dir / f"capture_{capture_id}.log"
+
+    def _log(msg: str) -> None:
+        with open(log_path, "a") as f:
+            f.write(msg + "\n")
+
+    _log(f"Image saved: {debug_path} ({debug_path.stat().st_size} bytes)")
+
     # Try Ollama first (free, local)
-    letters = _ollama_ocr(image_data)
-    if letters:
-        return jsonify({"letters": letters, "source": "ollama"})
+    ollama_result = _ollama_ocr(image_data)
+    if ollama_result:
+        letters, model = ollama_result
+        _log(f"Ollama succeeded ({model}): {letters}")
+        return jsonify({"letters": letters, "source": f"ollama/{model}"})
+    _log("Ollama failed or returned no letters")
 
     # Fall back to Claude API
     raw = base64.b64decode(image_data)
@@ -178,7 +195,9 @@ def ocr():
         tmp_path = f.name
     try:
         letters = recognize_letters(tmp_path)
+        _log(f"Claude succeeded: {letters}")
     except Exception as e:
+        _log(f"Claude failed: {e}")
         return jsonify({"error": f"OCR failed: {e}"}), 500
     finally:
         Path(tmp_path).unlink(missing_ok=True)
