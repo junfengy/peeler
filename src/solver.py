@@ -53,7 +53,7 @@ def solve(letters: list[str], dictionary: Dictionary,
         iterations += 1
         if depth > 200:
             return False
-        if iterations % 500 == 0 and time.time() - start_time > timeout:
+        if time.time() - start_time > timeout:
             return False
 
         placed_count = grid.letter_count()
@@ -109,7 +109,7 @@ def solve(letters: list[str], dictionary: Dictionary,
                         return True
                     grid.remove_word(placed)
 
-            if iterations % 1000 == 0 and time.time() - start_time > timeout:
+            if time.time() - start_time > timeout:
                 return False
 
         return False
