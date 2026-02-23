@@ -286,7 +286,17 @@ def analyze():
     if game is None:
         return jsonify({"error": "Session not found"}), 404
 
-    recommendations = analyze_swaps(game["letters"], DICTIONARY)
+    # Only analyze unplaced letters — those are the problem tiles
+    from collections import Counter
+    hand = Counter(game["letters"])
+    on_grid = Counter(game["grid"].cells.values())
+    remaining = hand - on_grid
+    unplaced = sorted(remaining.elements())
+
+    if not unplaced:
+        return jsonify({"recommendations": []})
+
+    recommendations = analyze_swaps(unplaced, DICTIONARY)
     return jsonify({"recommendations": recommendations})
 
 
