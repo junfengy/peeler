@@ -1,0 +1,4 @@
+anthropic>=0.40
+opencv-python>=4.8
+pytest>=8.0
+flask>=3.0

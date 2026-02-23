@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bananagrams Solver</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f0e6d3;
+  color: #333;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px;
+}
+h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
+.subtitle { text-align: center; color: #8b7355; font-size: 14px; margin-bottom: 16px; }
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+  background: #fff8ee;
+  border: 1px solid #d4c5a9;
+  border-radius: 8px;
+  padding: 8px 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.status-item { display: flex; gap: 4px; align-items: center; }
+.status-label { font-weight: 600; color: #8b7355; }
+
+/* Sections */
+.section {
+  background: #fff;
+  border: 1px solid #d4c5a9;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.section-title { font-size: 14px; font-weight: 600; color: #5a3e1b; margin-bottom: 10px; }
+
+/* Input area */
+.input-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#letters-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 2px solid #d4c5a9;
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: monospace;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.timeout-group { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #666; }
+#timeout-slider { width: 80px; }
+
+/* Buttons */
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary { background: #f5c518; color: #5a3e1b; }
+.btn-secondary { background: #e8dcc8; color: #5a3e1b; }
+.btn-danger { background: #d9534f; color: #fff; }
+.btn-info { background: #5bc0de; color: #fff; }
+.btn-sm { padding: 6px 10px; font-size: 12px; }
+
+/* Camera */
+.camera-section { margin-bottom: 12px; }
+.camera-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+#camera-preview {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 6px;
+  margin-top: 8px;
+  display: none;
+  background: #000;
+}
+#camera-canvas { display: none; }
+
+/* Grid */
+.grid-container { overflow-x: auto; padding: 8px 0; }
+.grid-table { border-collapse: collapse; margin: 0 auto; }
+.grid-table td {
+  width: 36px;
+  height: 36px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: monospace;
+}
+.grid-table td.tile {
+  background: #f5deb3;
+  border: 2px solid #c8a96e;
+  border-radius: 4px;
+  color: #3e2723;
+  text-shadow: 1px 1px 0 rgba(255,255,255,0.3);
+}
+.grid-table td.empty { background: transparent; border: none; }
+
+/* Action buttons */
+.actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: stretch; }
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #f9f5ee;
+  border: 1px solid #e8dcc8;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.action-group-label { font-size: 11px; color: #8b7355; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.inline-input {
+  width: 40px;
+  padding: 6px;
+  border: 2px solid #d4c5a9;
+  border-radius: 6px;
+  font-size: 16px;
+  font-family: monospace;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* Analysis panel */
+.analysis-panel { display: none; }
+.analysis-panel.visible { display: block; }
+.rec-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.rec-strong { background: #f8d7da; border-left: 4px solid #d9534f; }
+.rec-moderate { background: #fff3cd; border-left: 4px solid #f0ad4e; }
+.rec-none { background: #d4edda; border-left: 4px solid #5cb85c; }
+.rec-letter { font-weight: 700; font-size: 16px; font-family: monospace; }
+.rec-reasons { margin-top: 4px; color: #555; font-size: 12px; }
+
+/* Unplaced tiles */
+.unplaced-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+.unplaced-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: #f5deb3;
+  border: 2px dashed #d9534f;
+  border-radius: 4px;
+  font-size: 18px;
+  font-weight: 700;
+  font-family: monospace;
+  color: #d9534f;
+}
+
+/* Word list */
+.word-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.word-tag {
+  background: #f5deb3;
+  border: 1px solid #c8a96e;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: monospace;
+  font-weight: 600;
+}
+.word-pos { color: #999; font-weight: 400; }
+
+/* Overlay spinner */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 100;
+  justify-content: center;
+  align-items: center;
+}
+.overlay.active { display: flex; }
+.spinner-box {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px 48px;
+  text-align: center;
+}
+.spinner {
+  width: 40px; height: 40px;
+  border: 4px solid #e8dcc8;
+  border-top-color: #f5c518;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Error banner */
+.error-banner {
+  display: none;
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.error-banner.visible { display: block; }
+</style>
+</head>
+<body>
+
+<h1>Bananagrams Solver</h1>
+<p class="subtitle">Scan tiles or type letters, then solve</p>
+
+<div class="status-bar" id="status-bar" style="display:none">
+  <div class="status-item"><span class="status-label">Pool:</span> <span id="st-pool">—</span></div>
+  <div class="status-item"><span class="status-label">Hand:</span> <span id="st-hand">—</span></div>
+  <div class="status-item"><span class="status-label">Strategy:</span> <span id="st-strategy">—</span></div>
+</div>
+
+<div class="error-banner" id="error-banner"></div>
+
+<!-- Input section -->
+<div class="section">
+  <div class="section-title">Letters</div>
+  <div class="camera-section">
+    <div class="camera-controls">
+      <button class="btn btn-secondary btn-sm" id="btn-camera" onclick="toggleCamera()">Start Camera</button>
+      <button class="btn btn-secondary btn-sm" id="btn-capture" onclick="capturePhoto()" disabled>Capture</button>
+    </div>
+    <video id="camera-preview" autoplay playsinline></video>
+    <canvas id="camera-canvas"></canvas>
+  </div>
+  <div class="input-row">
+    <input type="text" id="letters-input" placeholder="Type letters, e.g. AABCDEEFGH" autocomplete="off">
+    <div class="timeout-group">
+      <label for="timeout-slider">Timeout:</label>
+      <input type="range" id="timeout-slider" min="10" max="120" value="60">
+      <span id="timeout-value">60s</span>
+    </div>
+    <button class="btn btn-primary" onclick="doSolve()">Solve</button>
+  </div>
+</div>
+
+<!-- Unplaced letters -->
+<div class="section" id="unplaced-section" style="display:none">
+  <div class="section-title">Unplaced Letters</div>
+  <div class="unplaced-tiles" id="unplaced-tiles"></div>
+</div>
+
+<!-- Grid -->
+<div class="section" id="grid-section" style="display:none">
+  <div class="section-title">Grid</div>
+  <div class="grid-container" id="grid-container"></div>
+</div>
+
+<!-- Actions -->
+<div class="section" id="actions-section" style="display:none">
+  <div class="section-title">Actions</div>
+  <div class="actions">
+    <div class="action-group">
+      <div class="action-group-label">Draw random</div>
+      <button class="btn btn-primary" onclick="doPeel()">Peel</button>
+    </div>
+    <div class="action-group">
+      <div class="action-group-label">Add specific</div>
+      <input type="text" class="inline-input" id="manual-letter" placeholder="AEF" style="width:60px;letter-spacing:2px">
+      <button class="btn btn-secondary" onclick="doManual()">Add</button>
+    </div>
+    <div class="action-group">
+      <div class="action-group-label">Return &amp; draw 3</div>
+      <input type="text" class="inline-input" id="swap-letter" maxlength="1" placeholder="Q">
+      <button class="btn btn-danger" onclick="doSwap()">Swap</button>
+    </div>
+    <button class="btn btn-info" onclick="doAnalyze()">Analyze Swaps</button>
+  </div>
+</div>
+
+<!-- Analysis -->
+<div class="section analysis-panel" id="analysis-section">
+  <div class="section-title">Swap Recommendations</div>
+  <div id="analysis-list"></div>
+</div>
+
+<!-- Words -->
+<div class="section" id="words-section" style="display:none">
+  <div class="section-title">Words</div>
+  <div class="word-list" id="word-list"></div>
+</div>
+
+<!-- Loading overlay -->
+<div class="overlay" id="loading-overlay">
+  <div class="spinner-box">
+    <div class="spinner"></div>
+    <div id="loading-text">Solving...</div>
+  </div>
+</div>
+
+<script>
+let sessionId = null;
+let cameraStream = null;
+
+/* -- Utilities -- */
+async function apiCall(url, body) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body),
+  });
+  return resp.json();
+}
+
+function showLoading(msg) {
+  document.getElementById("loading-text").textContent = msg || "Working...";
+  document.getElementById("loading-overlay").classList.add("active");
+}
+function hideLoading() {
+  document.getElementById("loading-overlay").classList.remove("active");
+}
+
+function showError(msg) {
+  const el = document.getElementById("error-banner");
+  el.textContent = msg;
+  el.classList.add("visible");
+  setTimeout(() => el.classList.remove("visible"), 5000);
+}
+
+function updateStatus(data) {
+  const bar = document.getElementById("status-bar");
+  bar.style.display = "flex";
+  if (data.pool_remaining !== undefined) document.getElementById("st-pool").textContent = data.pool_remaining;
+  if (data.total_letters !== undefined) document.getElementById("st-hand").textContent = data.total_letters;
+  if (data.strategy) document.getElementById("st-strategy").textContent = data.strategy;
+  if (data.new_letter) document.getElementById("st-strategy").textContent = (data.strategy || "") + " (+" + data.new_letter + ")";
+}
+
+/* -- Grid rendering -- */
+function renderGrid(data) {
+  if (!data.cells || data.cells.length === 0) return;
+  const b = data.bounds;
+  const cellMap = {};
+  data.cells.forEach(c => { cellMap[c.row + "," + c.col] = c.letter; });
+
+  let html = '<table class="grid-table">';
+  for (let r = b.min_row; r <= b.max_row; r++) {
+    html += "<tr>";
+    for (let c = b.min_col; c <= b.max_col; c++) {
+      const letter = cellMap[r + "," + c];
+      if (letter) {
+        html += '<td class="tile">' + letter + "</td>";
+      } else {
+        html += '<td class="empty"></td>';
+      }
+    }
+    html += "</tr>";
+  }
+  html += "</table>";
+  document.getElementById("grid-container").innerHTML = html;
+  document.getElementById("grid-section").style.display = "";
+}
+
+function renderWords(data) {
+  if (!data.words || data.words.length === 0) return;
+  const el = document.getElementById("word-list");
+  el.innerHTML = data.words.map(w =>
+    '<span class="word-tag">' + w.word + ' <span class="word-pos">(' + w.row + "," + w.col + " " + w.direction + ")</span></span>"
+  ).join("");
+  document.getElementById("words-section").style.display = "";
+}
+
+function renderUnplaced(data) {
+  const section = document.getElementById("unplaced-section");
+  const container = document.getElementById("unplaced-tiles");
+  if (data.unplaced && data.unplaced.length > 0) {
+    container.innerHTML = data.unplaced.map(l =>
+      '<span class="unplaced-tile">' + l + '</span>'
+    ).join("");
+    section.style.display = "";
+  } else {
+    section.style.display = "none";
+  }
+}
+
+function showResult(data) {
+  renderGrid(data);
+  renderUnplaced(data);
+  renderWords(data);
+  updateStatus(data);
+  document.getElementById("actions-section").style.display = "";
+}
+
+/* -- Camera -- */
+async function toggleCamera() {
+  const video = document.getElementById("camera-preview");
+  const btnCam = document.getElementById("btn-camera");
+  const btnCap = document.getElementById("btn-capture");
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+    video.style.display = "none";
+    btnCam.textContent = "Start Camera";
+    btnCap.disabled = true;
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}});
+    video.srcObject = cameraStream;
+    video.style.display = "block";
+    btnCam.textContent = "Stop Camera";
+    btnCap.disabled = false;
+  } catch (e) {
+    showError("Camera access denied: " + e.message);
+  }
+}
+
+async function capturePhoto() {
+  const video = document.getElementById("camera-preview");
+  const canvas = document.getElementById("camera-canvas");
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+  showLoading("Recognizing letters...");
+  try {
+    const result = await apiCall("/ocr", {image: dataUrl});
+    hideLoading();
+    if (result.error) { showError(result.error); return; }
+    document.getElementById("letters-input").value = result.letters.join("");
+  } catch (e) {
+    hideLoading();
+    showError("OCR failed: " + e.message);
+  }
+}
+
+/* -- Solve -- */
+async function doSolve() {
+  const raw = document.getElementById("letters-input").value.trim();
+  if (!raw) { showError("Enter some letters first"); return; }
+  const letters = raw.toUpperCase().split("").filter(c => /[A-Z]/.test(c));
+  const timeout = parseInt(document.getElementById("timeout-slider").value);
+
+  showLoading("Solving " + letters.length + " letters...");
+  try {
+    const data = await apiCall("/solve", {letters, timeout});
+    hideLoading();
+    if (data.error) { showError(data.error); return; }
+    sessionId = data.session_id;
+    showResult(data);
+  } catch (e) {
+    hideLoading();
+    showError("Solve failed: " + e.message);
+  }
+}
+
+/* -- Game actions -- */
+async function doPeel() {
+  if (!sessionId) { showError("Solve first"); return; }
+  showLoading("Peeling...");
+  try {
+    const data = await apiCall("/peel", {session_id: sessionId});
+    hideLoading();
+    if (data.win) { showError("Pool is empty \u2014 you win!"); return; }
+    if (data.error) { showError(data.error); return; }
+    showResult(data);
+  } catch (e) { hideLoading(); showError("Peel failed: " + e.message); }
+}
+
+async function doManual() {
+  if (!sessionId) { showError("Solve first"); return; }
+  const raw = document.getElementById("manual-letter").value.trim().toUpperCase();
+  const letters = raw.split("").filter(c => /[A-Z]/.test(c));
+  if (letters.length === 0) { showError("Enter one or more letters"); return; }
+  showLoading("Adding " + letters.join("") + "...");
+  try {
+    const data = await apiCall("/manual", {session_id: sessionId, letters});
+    hideLoading();
+    if (data.error) { showError(data.error); return; }
+    document.getElementById("manual-letter").value = "";
+    showResult(data);
+  } catch (e) { hideLoading(); showError("Manual add failed: " + e.message); }
+}
+
+async function doSwap() {
+  if (!sessionId) { showError("Solve first"); return; }
+  const letter = document.getElementById("swap-letter").value.trim().toUpperCase();
+  if (!letter || letter.length !== 1) { showError("Enter a letter to swap"); return; }
+  showLoading("Swapping " + letter + "...");
+  try {
+    const data = await apiCall("/swap", {session_id: sessionId, letter});
+    hideLoading();
+    if (data.error) { showError(data.error); return; }
+    document.getElementById("swap-letter").value = "";
+    showResult(data);
+    if (data.drawn_tiles) {
+      document.getElementById("st-strategy").textContent = "Swapped " + letter + " \u2192 drew " + data.drawn_tiles.join(", ");
+    }
+  } catch (e) { hideLoading(); showError("Swap failed: " + e.message); }
+}
+
+async function doAnalyze() {
+  if (!sessionId) { showError("Solve first"); return; }
+  showLoading("Analyzing swaps...");
+  try {
+    const data = await apiCall("/analyze", {session_id: sessionId});
+    hideLoading();
+    if (data.error) { showError(data.error); return; }
+    const list = document.getElementById("analysis-list");
+    if (!data.recommendations || data.recommendations.length === 0) {
+      list.innerHTML = '<div class="rec-item rec-none">No swap recommendations \u2014 your letters look good!</div>';
+    } else {
+      list.innerHTML = data.recommendations.map(r => {
+        let cls = "rec-none";
+        if (r.recommendation.includes("STRONGLY")) cls = "rec-strong";
+        else if (r.recommendation === "RECOMMENDED") cls = "rec-moderate";
+        return '<div class="rec-item ' + cls + '">' +
+          '<span class="rec-letter">' + r.letter + '</span> \u2014 ' + r.recommendation +
+          ' (score: ' + (r.swap_score !== undefined ? r.swap_score.toFixed(2) : "N/A") + ')' +
+          '<div class="rec-reasons">' + (r.reasons || []).join(" \u2022 ") + '</div>' +
+          '</div>';
+      }).join("");
+    }
+    document.getElementById("analysis-section").classList.add("visible");
+  } catch (e) { hideLoading(); showError("Analysis failed: " + e.message); }
+}
+
+/* -- Timeout slider -- */
+document.getElementById("timeout-slider").addEventListener("input", function() {
+  document.getElementById("timeout-value").textContent = this.value + "s";
+});
+</script>
+</body>
+</html>
