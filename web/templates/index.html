@@ -154,11 +154,11 @@ h1 { text-align: center; color: #5a3e1b; margin-bottom: 4px; }
 
 .unplaced-tile .swap-score {
   display: block;
-  font-size: 9px;
+  font-size: 13px;
   font-weight: 600;
   font-family: sans-serif;
   line-height: 1;
-  margin-top: 1px;
+  margin-top: 2px;
 }
 .swap-score.strong { color: #d9534f; }
 .swap-score.moderate { color: #f0ad4e; }
@@ -433,6 +433,9 @@ function showResult(data) {
   renderWords(data);
   updateStatus(data);
   document.getElementById("actions-section").style.display = "";
+  // Auto-fill swap return letter when only one unique unplaced letter
+  const uniqueUnplaced = [...new Set(lastUnplaced)];
+  document.getElementById("swap-letter").value = uniqueUnplaced.length === 1 ? uniqueUnplaced[0] : "";
 }
 
 /* -- Camera -- */
