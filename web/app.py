@@ -66,7 +66,7 @@ def _ollama_ocr(image_b64: str) -> tuple[list[str], str] | None:
                 data=payload,
                 headers={"Content-Type": "application/json"},
             )
-            with urlopen(req, timeout=60) as resp:
+            with urlopen(req, timeout=120) as resp:
                 body = _json.loads(resp.read())
             text = body.get("response", "")
             letters = _parse_letters(text)
