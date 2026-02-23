@@ -190,11 +190,16 @@ def incremental_solve(
         return result, "partial_restructure"
 
     # --- Strategy C: full re-solve ---
+    # Only attempt if we have enough budget and enough unplaced letters
+    # to justify the cost.  For 1-2 unplaced letters, quick_attach and
+    # partial_restructure are sufficient; a full re-solve would just grind.
     elapsed = time.time() - start
     remaining_c = max(0.0, timeout - elapsed)
-    result = _full_resolve(all_letters, dictionary, remaining_c)
-    if result is not None:
-        return result, "full_resolve"
+    unplaced_count = len(all_letters) - grid.letter_count()
+    if remaining_c >= 3.0 and unplaced_count >= 3:
+        result = _full_resolve(all_letters, dictionary, remaining_c)
+        if result is not None:
+            return result, "full_resolve"
 
     return grid, "failed"
 

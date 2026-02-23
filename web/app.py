@@ -229,7 +229,7 @@ def peel():
 
     game["letters"].append(new_letter)
     game["grid"], strategy = incremental_solve(
-        game["grid"], new_letter, game["letters"], DICTIONARY
+        game["grid"], new_letter, game["letters"], DICTIONARY, timeout=10.0,
     )
     _try_place_unplaced(game)
     result = grid_to_json(game["grid"], all_letters=game["letters"])
@@ -261,7 +261,7 @@ def manual():
     for letter in letters:
         game["letters"].append(letter)
         game["grid"], strategy = incremental_solve(
-            game["grid"], letter, game["letters"], DICTIONARY
+            game["grid"], letter, game["letters"], DICTIONARY, timeout=10.0,
         )
 
     _try_place_unplaced(game)
@@ -340,7 +340,7 @@ def swap():
     strategy = ""
     for new_letter in drawn:
         game["grid"], strategy = incremental_solve(
-            game["grid"], new_letter, game["letters"], DICTIONARY
+            game["grid"], new_letter, game["letters"], DICTIONARY, timeout=10.0,
         )
 
     _try_place_unplaced(game)
